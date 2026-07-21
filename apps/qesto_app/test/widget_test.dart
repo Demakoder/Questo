@@ -1,9 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qesto/app/qesto_app.dart';
 import 'package:qesto/mocks/mock_qesto_repository.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const notificationChannel = MethodChannel('ru.qesto.qesto/notifications');
+  late List<Map<String, Object?>> mockNotifications;
+
+  setUp(() {
+    mockNotifications = [];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notificationChannel, (call) async {
+          return switch (call.method) {
+            'hasAccess' => true,
+            'readNotifications' => mockNotifications,
+            'removeNotification' || 'clearNotifications' => null,
+            _ => null,
+          };
+        });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notificationChannel, null);
+  });
+
   Widget buildApp() {
     return const QestoApp(
       repository: MockQestoRepository(delay: Duration.zero),
@@ -36,14 +59,35 @@ void main() {
 
     await tester.tap(find.byTooltip('Уведомления'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Новые советы и важные события появятся здесь'),
-      findsOneWidget,
-    );
+    expect(find.text('Найденные операции'), findsOneWidget);
+    expect(find.text('Новых операций нет'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Назад'));
     await tester.pumpAndSettle();
     expect(find.text('Расходы по категориям'), findsOneWidget);
+  });
+
+  testWidgets('распознанное уведомление Сбербанка показывается как расход', (
+    tester,
+  ) async {
+    mockNotifications = [
+      {
+        'packageName': 'ru.sberbankmobile',
+        'notificationKey': 'sber-widget-test',
+        'postedAt': DateTime(2026, 7, 21, 14, 32).millisecondsSinceEpoch,
+        'title': 'Покупка Burger King',
+        'text': '50 ₽ - Баланс: ... ₽ Счёт карты МИР ...',
+      },
+    ];
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Уведомления'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Burger King'), findsOneWidget);
+    expect(find.text('50 ₽ · Кафе и рестораны'), findsOneWidget);
+    expect(find.text('Добавить'), findsOneWidget);
   });
 
   testWidgets('месяцы бюджета переключаются свайпом, детали открываются', (

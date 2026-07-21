@@ -15,12 +15,14 @@ class AddExpenseScreen extends StatefulWidget {
     required this.controller,
     required this.period,
     this.initialTransaction,
+    this.addInitialAsNew = false,
     super.key,
   });
 
   final BudgetController controller;
   final BudgetPeriod period;
   final BudgetTransaction? initialTransaction;
+  final bool addInitialAsNew;
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -36,7 +38,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   BudgetCategory? _category;
   String? _subcategory;
 
-  bool get _editing => widget.initialTransaction != null;
+  bool get _editing =>
+      widget.initialTransaction != null && !widget.addInitialAsNew;
 
   @override
   void initState() {
@@ -110,7 +113,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         ? _category!.name
         : _titleController.text.trim();
     final initial = widget.initialTransaction;
-    if (initial == null) {
+    if (initial == null || widget.addInitialAsNew) {
       widget.controller.addExpense(
         period: widget.period,
         amount: amount,

@@ -8,6 +8,8 @@ import '../data/models/qesto_models.dart';
 import '../features/benefits/benefits_screen.dart';
 import '../features/budget/budget_screen.dart';
 import '../features/budget/state/budget_controller.dart';
+import '../features/notification_import/data/notification_capture_service.dart';
+import '../features/notification_import/presentation/notification_import_screen.dart';
 import '../features/savings/savings_screen.dart';
 import '../features/shared/placeholder_screen.dart';
 
@@ -59,13 +61,20 @@ class _QestoAppShellState extends State<QestoAppShell> {
     setState(() => _selectedIndex = index);
   }
 
-  void _openNotifications() {
+  Future<void> _openNotifications() async {
+    const service = NotificationCaptureService();
+
+    if (!await service.hasAccess()) {
+      await service.openSettings();
+      return;
+    }
+    if (!mounted) return;
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const PlaceholderScreen(
-          title: 'Уведомления',
-          description: 'Новые советы и важные события появятся здесь',
-          icon: Icons.notifications_none_rounded,
+        builder: (_) => NotificationImportScreen(
+          controller: _budgetController,
+          captureService: service,
         ),
       ),
     );
