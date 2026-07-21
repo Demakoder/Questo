@@ -1,0 +1,238 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:qesto/app/qesto_app.dart';
+import 'package:qesto/mocks/mock_qesto_repository.dart';
+
+void main() {
+  Widget buildApp() {
+    return const QestoApp(
+      repository: MockQestoRepository(delay: Duration.zero),
+    );
+  }
+
+  testWidgets('основные вкладки переключаются и сохраняют содержимое', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Бюджет'), findsWidgets);
+    expect(find.text('Расходы по категориям'), findsOneWidget);
+
+    await tester.tap(find.text('Выгода').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Скидка 15% в Перекрёстке'), findsOneWidget);
+
+    await tester.tap(find.text('Накопления').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Накоплено'), findsOneWidget);
+  });
+
+  testWidgets('уведомления открываются и кнопка назад работает', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Уведомления'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Новые советы и важные события появятся здесь'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Назад'));
+    await tester.pumpAndSettle();
+    expect(find.text('Расходы по категориям'), findsOneWidget);
+  });
+
+  testWidgets('месяцы бюджета переключаются свайпом, детали открываются', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Бюджет на июль'), findsOneWidget);
+    await tester.fling(find.byType(PageView), const Offset(-500, 0), 1200);
+    await tester.pumpAndSettle();
+    expect(find.text('Бюджет на август'), findsOneWidget);
+    expect(find.text('109%'), findsOneWidget);
+
+    await tester.tap(find.text('Бюджет на август'));
+    await tester.pumpAndSettle();
+    expect(find.text('Динамика бюджета'), findsOneWidget);
+    expect(find.text('Выгода'), findsNothing);
+    await tester.tap(find.byTooltip('Назад'));
+    await tester.pumpAndSettle();
+    expect(find.text('Бюджет на август'), findsOneWidget);
+  });
+
+  testWidgets('разделы выгоды переключают набор карточек', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Выгода').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Акции'));
+    await tester.pumpAndSettle();
+    expect(find.text('Три поездки со скидкой 25%'), findsOneWidget);
+
+    await tester.tap(find.text('Отслеживаемое'));
+    await tester.pumpAndSettle();
+    expect(find.text('Беспроводные наушники'), findsOneWidget);
+  });
+
+  testWidgets('сумма и серия накоплений ведут на разные экраны', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Накопления').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('467 000 ₽'));
+    await tester.pumpAndSettle();
+    expect(find.text('Динамика накоплений'), findsOneWidget);
+    await tester.tap(find.byTooltip('Назад'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('64 недели'));
+    await tester.pumpAndSettle();
+    expect(find.text('Серия накоплений'), findsOneWidget);
+  });
+
+  testWidgets('полный список категорий и экран категории открываются', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Бюджет на июль'));
+    await tester.pumpAndSettle();
+    await tester.fling(find.byType(ListView), const Offset(0, -1100), 1600);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('show-all-category-plans')));
+    await tester.pumpAndSettle();
+    expect(find.text('Сортировка'), findsOneWidget);
+
+    await tester.tap(find.text('Продукты').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Операции'), findsOneWidget);
+    expect(find.text('Перекрёсток'), findsWidgets);
+  });
+
+  testWidgets('показывает полный список предстоящих трат', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Бюджет на июль'));
+    await tester.pumpAndSettle();
+    await tester.fling(find.byType(ListView), const Offset(0, -1800), 1800);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('show-all-upcoming-expenses')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Spotify'), findsOneWidget);
+    expect(find.textContaining('Аренда'), findsOneWidget);
+  });
+
+  testWidgets('ручное добавление расхода обновляет итог', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    expect(find.text('46 700 ₽'), findsWidgets);
+
+    await tester.ensureVisible(find.text('Добавить'));
+    await tester.tap(find.text('Добавить'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Добавить расход'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('expense-amount-field')),
+      '1000',
+    );
+    await tester.enterText(
+      find.byKey(const Key('expense-title-field')),
+      'Тестовая покупка',
+    );
+    await tester.tap(find.text('Выбрать'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Продукты').first);
+    await tester.pumpAndSettle();
+    await tester.fling(find.byType(ListView), const Offset(0, -900), 1500);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Сохранить расход'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('47 700 ₽'), findsWidgets);
+  });
+
+  testWidgets('статистика открывается и вкладки переключаются', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Статистика'));
+    await tester.tap(find.text('Статистика'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('statistics-title')), findsOneWidget);
+    expect(find.text('Финансовая динамика'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('statistics-tab-expenses')));
+    await tester.pumpAndSettle();
+    expect(find.text('Динамика расходов'), findsOneWidget);
+  });
+
+  testWidgets('период, сравнение и фильтры статистики работают', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Статистика'));
+    await tester.tap(find.text('Статистика'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('statistics-period-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Последние 30 дней'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('20 июня'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('statistics-comparison-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Без сравнения'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('statistics-filter-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Наличные'));
+    await tester.tap(find.byKey(const Key('statistics-apply-filters')));
+    await tester.pumpAndSettle();
+    expect(find.text('1'), findsWidgets);
+  });
+
+  testWidgets('служебные экраны статистики открываются', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Статистика'));
+    await tester.tap(find.text('Статистика'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('statistics-tracked-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Отслеживаемое'), findsOneWidget);
+    expect(find.text('Кафе и рестораны'), findsOneWidget);
+    await tester.tap(find.byTooltip('Назад'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('statistics-explore-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Собственный финансовый запрос'), findsOneWidget);
+    await tester.tap(find.byTooltip('Назад'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('statistics-quality-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Полнота статистики'), findsOneWidget);
+    expect(find.text('Возможный дубль'), findsOneWidget);
+  });
+}
